@@ -101,7 +101,8 @@ show_plot <- function(place) {
   ggplot(data) +
     geom_bar(aes(month, people, fill = spots), stat = "identity") +
     facet_wrap(vars(spots, year), ncol = length(tourist__files)) +
-    ggtitle(paste0("「", place, "」", "的搜尋結果"))
+    ggtitle(paste0("「", place, "」", "的搜尋結果")) +
+    theme(text = element_text(family="STHeiti"))
 }
 
 sample(tourist$spots, size = 30) # 可重複執行, 從裡面挑選想分析的景點
@@ -334,8 +335,6 @@ apify_input_zh <- c("北港朝天宮", "虎頭山風景特定區",
                     "國立科學工藝博物館", "獅頭山風景區")
 
 reviews <- readr::read_csv("google_map_reviews.csv")
-length(reviews$`reviews/0/text`)
-names(reviews)
 
 # 把reviews的名稱裡的"/"改成"_"以便之後使用
 for (i in seq_along(names(reviews))) {
@@ -409,8 +408,9 @@ sentiment_plot <- function(site) {
     geom_col(aes(reorder(word, n), n, fill = Polarity)) +
     coord_flip() +
     labs(title = paste0(site, "情緒分析 正向／負向 前十名"), 
-         x = "出現次數", 
-         y = "字詞")
+         y = "出現次數", 
+         x = "字詞") +
+    theme(text = element_text(family="STHeiti"))
 }
   
 
