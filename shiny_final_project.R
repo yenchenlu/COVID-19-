@@ -3,7 +3,8 @@ library(gapminder) # data
 library(DT)
 library(shinythemes)
 library(ggplot2)
-data <- source("r_final_project.R")
+library(rsconnect)
+data <- source("r_final_project.R", local = TRUE)
 
 ui <- fluidPage(
   theme = shinytheme("flatly"),
@@ -33,7 +34,13 @@ ui <- fluidPage(
       DT::dataTableOutput("growth")
     ),
     tabPanel(
-      title = "成長率前十大景點 Google評論情緒分析"
+      title = "成長率前十大景點 Google評論情緒分析",
+      selectInput("site", "請選擇景點", choices = c("北港朝天宮", "虎頭山風景特定區", 
+                                               "日月潭風景區", "新竹漁港", 
+                                               "鹿野高臺", "六福村主題遊樂園", 
+                                               "溪頭自然教育園區", "國立海洋科技博物館", 
+                                               "國立科學工藝博物館")),
+      plotOutput("sentimentplot")
     ),
     tabPanel(
       title = "結論 / 資料來源",
@@ -49,6 +56,7 @@ server <- function(input, output) {
   output$showplot <- renderPlot({
     show_plot(input$place)
   })
+  
   growth_data <-  reactive({if (input$period == "全年度") {
     if (input$year == "2018-2019") {
       sort_growth_rate(1:12, 1000000, 2018)
@@ -64,10 +72,13 @@ server <- function(input, output) {
       } else {sort_growth_rate(3:4, 150000, 2019)}
     }
   }})
-  
   output$growth <- DT::renderDataTable({
     data <- growth_data()
     data
+  })
+  
+  output$sentimentplot <- renderPlot({
+    sentiment_plot(input$site)
   })
 }
 

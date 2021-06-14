@@ -99,7 +99,7 @@ show_plot <- function(place) {
     factor(as.character(data$month), levels = unique(as.character(data$month)))
   options(repr.plot.width= 20, repr.plot.height=7*length(unique(data$spots)))
   ggplot(data) +
-    geom_bar(aes(month, people), stat = "identity", fill = "cornflowerblue") +
+    geom_bar(aes(month, people, fill = spots), stat = "identity") +
     facet_wrap(vars(spots, year), ncol = length(tourist__files)) +
     ggtitle(paste0("「", place, "」", "的搜尋結果"))
 }
@@ -247,7 +247,18 @@ sort_growth_rate(
 sort_growth_rate(3:6, 190000, 2019) %>% head(10)
 
 # July-August
-sort_growth_rate(7:8, 300000, 2019) %>% head(10)
+jul_aus <- sort_growth_rate(7:8, 300000, 2019) %>% head(10)
+jul_aus$spot_name
+apify_input <- c("BeiGang ChaoTian Temple",
+                 "Houtou Mountain Scenic Area",
+                 "The Sunmoonlake Scenic Area",
+                 "Hsinchu Fishing Port",
+                 "Luyeh High Terrace",
+                 "Leofoo Village Theme Park",
+                 "Xitou Nature Education Area",
+                 "National Museum of Marine Science & Technology",
+                 "National Science and Technology Museum",
+                 "Lion's Head Mountain Scenic Area")
 
 # check_names function----------------------------------------------------------
 # 檢查名字有沒有改變或混淆
@@ -302,21 +313,105 @@ check_names() %>% filter(count == 3, n_name == 2)
 # check_names() %>% filter(count == 1)
 # 行政瑕疵: 一地多名
 
-# 
+# 爬七、八月2019-20成長率前十名景點的Google Map評論各25則-----------------------
+# July-August
+jul_aus <- sort_growth_rate(7:8, 300000, 2019) %>% head(10)
+jul_aus$spot_name
+apify_input <- c("BeiGang ChaoTian Temple",
+                 "Houtou Mountain Scenic Area",
+                 "The Sunmoonlake Scenic Area",
+                 "Hsinchu Fishing Port",
+                 "Luyeh High Terrace",
+                 "Leofoo Village Theme Park",
+                 "Xitou Nature Education Area",
+                 "National Museum of Marine Science & Technology",
+                 "National Science and Technology Museum",
+                 "Lion's Head Mountain Scenic Area")
+apify_input_zh <- c("北港朝天宮", "虎頭山風景特定區", 
+                    "日月潭風景區", "新竹漁港", 
+                    "鹿野高臺", "六福村主題遊樂園", 
+                    "溪頭自然教育園區", "國立海洋科技博物館", 
+                    "國立科學工藝博物館", "獅頭山風景區")
 
+reviews <- readr::read_csv("google_map_reviews.csv")
+length(reviews$`reviews/0/text`)
+names(reviews)
 
+# 把reviews的名稱裡的"/"改成"_"以便之後使用
+for (i in seq_along(names(reviews))) {
+  names(reviews)[i] <- str_replace_all(names(reviews)[i], "/", "_") 
+}
 
+# 只挑出reviews中的文本們 (長相：review_texts[[3]] 就是每一個景點的第三則評論放在一起)
+review_texts <- c()
+for (i in seq(25)) {
+  review_texts[i] <- reviews[paste0("reviews_", i-1, "_text")]
+}
 
+review_texts[[3]]
 
+# 整理成每個景點的25則評論為一欄
+nine_spots_reviews <- tibble(北港朝天宮 = vector("character", length = 25), 虎頭山風景特定區 = vector("character", length = 25), 日月潭風景區 = vector("character", length = 25), 
+                             新竹漁港 = vector("character", length = 25), 鹿野高臺 = vector("character", length = 25), 六福村主題遊樂園 = vector("character", length = 25),
+                             溪頭自然教育園區 = vector("character", length = 25), 國立海洋科技博物館 = vector("character", length = 25), 國立科學工藝博物館 = vector("character", length = 25))
+for (i in seq(25)) {
+  nine_spots_reviews$北港朝天宮[i] <- review_texts[[i]][1]
+  nine_spots_reviews$虎頭山風景特定區[i] <- review_texts[[i]][2]
+  nine_spots_reviews$日月潭風景區[i] <- review_texts[[i]][6]
+  nine_spots_reviews$新竹漁港[i] <- review_texts[[i]][11] 
+  nine_spots_reviews$鹿野高臺[i] <- review_texts[[i]][13]
+  nine_spots_reviews$六福村主題遊樂園[i] <- review_texts[[i]][14] 
+  nine_spots_reviews$溪頭自然教育園區[i] <- review_texts[[i]][16] 
+  nine_spots_reviews$國立海洋科技博物館[i] <- review_texts[[i]][18] 
+  nine_spots_reviews$國立科學工藝博物館[i] <- review_texts[[i]][19] 
+}
 
+#清數字
+for (i in seq(9)) {
+  nine_spots_reviews[[i]] <- gsub('[0-9]+', '', nine_spots_reviews[[i]])
+}
 
-
-
-
-
-
-
-
-
+# 讀sentiment analysis辭典
+sent <- readr::read_csv("ch.senti.lex.csv")
+# 大家一起情緒分析--------------------------------------------------------------
+sentiment_plot <- function(site) {
+  # 斷詞
+  library(jiebaR)
+  seg <- worker()
+  seg_site <- tibble(word = segment(nine_spots_reviews[[site]], seg))
+  
+  # 去掉stopwords
+  stop_words <- readLines("stopwords.txt", encoding = "UTF-8")
+  stop_df <- tibble(word = stop_words)
+  site_remove <- anti_join(seg_site, stop_df)
+  
+  # inner join 評論 和 辭典
+  site_sent <- inner_join(site_remove, sent, by = c("word" = "lemma"))
+  site_count <- site_sent %>%
+    count(word, Polarity) %>%
+    arrange(desc(n)) 
+  
+  # 景點評論負向詞 把n變-n是為了之後畫圖漂亮用的而已
+  site_negative <- site_count %>%
+    filter(Polarity == "N") %>%
+    top_n(10) %>%
+    mutate(n = -n)
+  
+  # 景點評論正向詞
+  site_positive <- site_count %>%
+    filter(Polarity == "P") %>%
+    top_n(10)
+  
+  # 把正向跟負向的前十名合併
+  site_pos_neg <- rbind(site_negative, site_positive)
+  
+  ggplot(site_pos_neg) +
+    geom_col(aes(reorder(word, n), n, fill = Polarity)) +
+    coord_flip() +
+    labs(title = paste0(site, "情緒分析 正向／負向 前十名"), 
+         x = "出現次數", 
+         y = "字詞")
+}
+  
 
 
