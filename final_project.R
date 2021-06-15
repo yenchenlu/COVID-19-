@@ -14,8 +14,7 @@ tourist__files <- c("tourist_18", "tourist_19", "tourist_20")
 
 
 # 設定字體
-theme <-
-    theme_get()
+theme <- theme_get()
 theme$text$family <- "PingFangTC-Thin"
 theme_set(theme)
 
@@ -81,29 +80,42 @@ tourist <- tourist %>%
 
 
 # 看各縣市的總遊客量
-tourist %>%
-    group_by(City, year) %>%
-    summarise(num_spots = n(),
-              total_tourist = sum(Total)) %>%
-    arrange(desc(total_tourist))
+# tourist %>%
+#     group_by(City, year) %>%
+#     summarise(num_spots = n(),
+#               total_tourist = sum(Total)) %>%
+#     arrange(desc(total_tourist))
+
+get_height <- function(place) {
+    return (length(unique(tourist$spots[str_detect(tourist$spots, place)])))}
 
 
 # 對特定地點的觀光人數對月份作圖, 並以年份做facet_wrap (包成function)
-show_plot <- function(place, save = TRUE, width = 10) {
+show_plot <- function(place = "101", save = FALSE, width = 10) {
     data <- tourist %>% filter(str_detect(spots, place)) %>%
         pivot_longer(cols = Jan:Dec,
                      names_to = "month",
                      values_to = "people") %>%
-        select(!Total)
-    cat(paste0("「", place, "」", "的搜尋結果:"), unique(data$spots), sep = "\n")
+        select(!Total) %>%
+        mutate(W_people = paste0(round(people/10000, 1), "W"))
+    # cat(paste0("「", place, "」", "的搜尋結果:"), unique(data$spots), sep = "\n")
     data$month <-
         factor(as.character(data$month), levels = unique(as.character(data$month)))
-    # options(repr.plot.width= 20, repr.plot.height=7*length(unique(data$spots)))
-    p <- ggplot(data) +
-        geom_bar(aes(month, people), stat = "identity", fill = "cornflowerblue") +
-        facet_wrap(vars(spots, year), ncol = length(tourist__files)) +
-        ggtitle(paste0("「", place, "」", "的搜尋結果"))
-    print(p)
+    options(repr.plot.width= 20, repr.plot.height=7*length(unique(data$spots)))
+    
+    p <- ggplot(data, aes(month, people, fill = spots, label = W_people)) +
+        geom_bar(stat = "identity") + 
+        theme(text = element_text(size=16), legend.position="top") + 
+        geom_text(color="black", size=3.5, angle=0, position = position_dodge(1), vjust=-0.5)
+    
+    if (length(data$City) > 0){
+        p <- p + facet_wrap(vars(spots, year), ncol = length(tourist__files)) +
+            ggtitle(paste0("「", place, "」", "的搜尋結果")) # + scale_fill_brewer(palette = "Spectral")
+    }
+    else{
+        p <- p + ggtitle(paste0("「", place, "」", "無搜尋結果"))
+    }
+    
     if (save) {
         ggsave(
             "plot.png",
@@ -115,19 +127,13 @@ show_plot <- function(place, save = TRUE, width = 10) {
             device = "png"
         )
     }
+    return (p)
 }
 
 
 # sample(tourist$spots, size = 30)
 # options(repr.plot.width= 20, repr.plot.height=9)
-show_plot("國立臺灣.*博物館", save = T, width = 12) #可自行調整width(有些地名太長塞不下)
-ggsave(
-    "showplot.png",
-    width = 10,
-    height = 7,
-    dpi = 320,
-    device = "png"
-)
+show_plot("遊樂園", save = F, width = 12) #可自行調整width(有些地名太長塞不下)
 
 
 
@@ -292,3 +298,103 @@ check_names <- function() {
 
 
 
+
+# 爬七、八月2019-20成長率前十名景點的Google Map評論各25則-----------------------
+# July-August
+jul_aus <- sort_growth_rate(7:8, 300000, 2019) %>% head(10)
+jul_aus$spot_name
+apify_input <- c("BeiGang ChaoTian Temple",
+                 "Houtou Mountain Scenic Area",
+                 "The Sunmoonlake Scenic Area",
+                 "Hsinchu Fishing Port",
+                 "Luyeh High Terrace",
+                 "Leofoo Village Theme Park",
+                 "Xitou Nature Education Area",
+                 "National Museum of Marine Science & Technology",
+                 "National Science and Technology Museum",
+                 "Lion's Head Mountain Scenic Area")
+apify_input_zh <- c("北港朝天宮", "虎頭山風景特定區", 
+                    "日月潭風景區", "新竹漁港", 
+                    "鹿野高臺", "六福村主題遊樂園", 
+                    "溪頭自然教育園區", "國立海洋科技博物館", 
+                    "國立科學工藝博物館", "獅頭山風景區")
+
+reviews <- readr::read_csv("google_map_reviews.csv")
+
+# 把reviews的名稱裡的"/"改成"_"以便之後使用
+for (i in seq_along(names(reviews))) {
+    names(reviews)[i] <- str_replace_all(names(reviews)[i], "/", "_") 
+}
+
+# 只挑出reviews中的文本們 (長相：review_texts[[3]] 就是每一個景點的第三則評論放在一起)
+review_texts <- c()
+for (i in seq(25)) {
+    review_texts[i] <- reviews[paste0("reviews_", i-1, "_text")]
+}
+
+review_texts[[3]]
+
+# 整理成每個景點的25則評論為一欄
+nine_spots_reviews <- tibble(北港朝天宮 = vector("character", length = 25), 虎頭山風景特定區 = vector("character", length = 25), 日月潭風景區 = vector("character", length = 25), 
+                                  新竹漁港 = vector("character", length = 25), 鹿野高臺 = vector("character", length = 25), 六福村主題遊樂園 = vector("character", length = 25),
+                                  溪頭自然教育園區 = vector("character", length = 25), 國立海洋科技博物館 = vector("character", length = 25), 國立科學工藝博物館 = vector("character", length = 25))
+for (i in seq(25)) {
+    nine_spots_reviews$北港朝天宮[i] <- review_texts[[i]][1]
+    nine_spots_reviews$虎頭山風景特定區[i] <- review_texts[[i]][2]
+    nine_spots_reviews$日月潭風景區[i] <- review_texts[[i]][6]
+    nine_spots_reviews$新竹漁港[i] <- review_texts[[i]][11] 
+    nine_spots_reviews$鹿野高臺[i] <- review_texts[[i]][13]
+    nine_spots_reviews$六福村主題遊樂園[i] <- review_texts[[i]][14] 
+    nine_spots_reviews$溪頭自然教育園區[i] <- review_texts[[i]][16] 
+    nine_spots_reviews$國立海洋科技博物館[i] <- review_texts[[i]][18] 
+    nine_spots_reviews$國立科學工藝博物館[i] <- review_texts[[i]][19] 
+}
+
+#清數字
+for (i in seq(9)) {
+    nine_spots_reviews[[i]] <- gsub('[0-9]+', '', nine_spots_reviews[[i]])
+}
+
+# 讀sentiment analysis辭典
+sent <- readr::read_csv("ch.senti.lex.csv")
+# 大家一起情緒分析--------------------------------------------------------------
+sentiment_plot <- function(site) {
+    # 斷詞
+    library(jiebaR)
+    seg <- worker()
+    seg_site <- tibble(word = segment(nine_spots_reviews[[site]], seg))
+    
+    # 去掉stopwords
+    stop_words <- readLines("stopwords.txt", encoding = "UTF-8")
+    stop_df <- tibble(word = stop_words)
+    site_remove <- anti_join(seg_site, stop_df)
+    
+    # inner join 評論 和 辭典
+    site_sent <- inner_join(site_remove, sent, by = c("word" = "lemma"))
+    site_count <- site_sent %>%
+        count(word, Polarity) %>%
+        arrange(desc(n)) 
+    
+    # 景點評論負向詞 把n變-n是為了之後畫圖漂亮用的而已
+    site_negative <- site_count %>%
+        filter(Polarity == "N") %>%
+        top_n(10) %>%
+        mutate(n = -n)
+    
+    # 景點評論正向詞
+    site_positive <- site_count %>%
+        filter(Polarity == "P") %>%
+        top_n(10)
+    
+    # 把正向跟負向的前十名合併
+    site_pos_neg <- rbind(site_negative, site_positive)
+    
+    ggplot(site_pos_neg, aes(reorder(word, n), n, fill = Polarity, label = abs(n))) + 
+        geom_col() +
+        coord_flip() +
+        labs(title = paste0(site, "情緒分析 正向／負向 前十名"), 
+             y = "出現次數", 
+             x = "字詞") +
+        theme(text = element_text(family="STHeiti", size=16), legend.position="top") +
+        geom_text(color="black", size=4, angle=0, position = position_dodge(1), hjust=-0.5)
+}
