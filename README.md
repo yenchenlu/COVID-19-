@@ -5,3 +5,6 @@
 ## 連結
 - https://yen-chen-lu.shinyapps.io/covid19_tourists/
 - https://trainerblade.shinyapps.io/R_group1_final_project/
+
+## demo
+- 在`各景點每月遊歷人數`時, 可以依序輸入`101`, `Zoo`, `遊樂園`, `Taiwan.+Center`, `墾丁` 來demo
